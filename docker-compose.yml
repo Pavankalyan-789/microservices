@@ -1,0 +1,96 @@
+services:
+  user-db:
+    image: postgres:17
+    container_name: user-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123456
+      POSTGRES_DB: user_db
+    ports:
+      - "5434:5432"
+    networks:
+      - backend
+    restart: always 
+    volumes:
+      - user-db-data:/var/lib/postgresql/data  
+
+  task-db:
+    image: postgres:17
+    container_name: task-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123456
+      POSTGRES_DB: task_db
+    ports:
+      - "5433:5432"
+    networks:
+      - backend
+    restart: always 
+    volumes:
+      - task-db-data:/var/lib/postgresql/data 
+
+  user-service:
+    build: ./user-service
+    container_name: user-service
+    environment:
+      DB_URL: postgresql+asyncpg://postgres:123456@user-db:5432/user_db
+    depends_on:
+      - user-db
+    networks:
+      - backend
+    ports:
+      - "8000:8000"
+    restart: always  
+
+  task-service:
+    build: ./task-service
+    container_name: task-service
+    environment:
+      DB_URL: postgresql+asyncpg://postgres:123456@task-db:5432/task_db
+    depends_on:
+      - task-db
+    networks:
+      - backend
+    ports:
+      - "8001:8000"
+    restart: always  
+
+  gateway-service:
+    build: ./gateway-service
+    container_name: gateway-service
+    environment:
+      USER_SERVICE_URL: http://user-service:8000
+      TASK_SERVICE_URL: http://task-service:8001
+    depends_on:
+      - user-service
+      - task-service
+    networks:
+      - backend
+    ports:
+      - "8002:8000"
+    restart: always  
+
+  nginx:
+    image: nginx:latest
+    container_name: nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - user-service
+      - task-service
+      - gateway-service
+    networks:
+      - backend
+    restart: always
+
+networks:
+  backend:
+    driver: bridge
+
+volumes:
+  user-db-data:
+    driver: local
+  task-db-data:
+    driver: local 
